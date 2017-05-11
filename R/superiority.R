@@ -9,6 +9,15 @@
 #' tests. A convenient wrapper function, \code{\link{interpret_superiority}},
 #' is provided, making use of this object.
 #'
+#' This \code{interpretation_set} object contains \code{placeholders} for
+#' descriptive names of the comparison intervention and tested intervention.
+#' When used with \code{\link{confinterpret}} these are provided via the
+#' \code{comparison_labels} parameter as a named character vector of length 2,
+#' \code{c(comparison_intervention = "Your control / comparison intervention",
+#' tested_intervention = "Your new / tested intervention")}. When using the
+#' convenience wrapper function, this is handled through the \code{groups}
+#' parameter.
+#'
 #' @export
 #'
 interpretations_superiority <- structure(list(
@@ -17,11 +26,6 @@ interpretations_superiority <- structure(list(
   #                    "Superiority"),
   placeholders = c(comparison_intervention = "$comp",
                    tested_intervention = "$test"),
-  # Don't think the list version adds anything much.
-  # (Would allow $ referencing as well as [ and [[. Not sure that adds.)
-  #
-  # placeholders = list(comparison_intervention = "$comp",
-  #                  tested_intervention = "$test"),
   interpretations = list(
     list(interpretation_short = "Inferior",
          interpretation       = "$test inferior to $comp",
@@ -83,6 +87,14 @@ interpretations_superiority <- structure(list(
 #'   likely to be \strong{not} beneficial.
 #'
 #' @inheritParams confinterpret
+#' @inherit confinterpret return
+#' @examples
+#' # Establish a test confidence interval
+#' ci_test <- matrix(c(-0.1, 0.1),
+#'                   nrow = 1, dimnames = list("estimate",
+#'                                             c("2.5 %", "97.5 %")))
+#' interpret_superiority(ci_test, 0, c("Treatment as usual", "New treatment"))
+#'
 #' @export
 #'
 interpret_superiority <- function(ci, null_value = 0,

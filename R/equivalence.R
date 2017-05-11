@@ -10,6 +10,8 @@
 #' tests. A convenient wrapper function, \code{\link{interpret_equivalence}},
 #' is provided, making use of this object.
 #'
+#' @inherit interpretations_superiority details
+#'
 #' @export
 #'
 interpretations_equivalence <- structure(list(
@@ -94,7 +96,7 @@ interpretations_equivalence <- structure(list(
 #'
 #' This function is provided in the form of a convenience wrapper for
 #' \code{\link{confinterpret}}, using
-#' \code{\link{interpretations_superiority}} as its
+#' \code{\link{interpretations_equivalence}} as its
 #' \code{\link{interpretation_set}}.
 #'
 #' @param eq_margin Numerical value specifying the equivalence margin
@@ -106,6 +108,14 @@ interpretations_equivalence <- structure(list(
 #'   region for comparison.
 #' @inheritParams confinterpret
 #' @inheritParams interpret_superiority
+#' @inherit confinterpret return
+#' @examples
+#' # Establish a test confidence interval
+#' ci_test <- matrix(c(-0.1, 0.1),
+#'                   nrow = 1, dimnames = list("estimate",
+#'                                             c("2.5 %", "97.5 %")))
+#' interpret_equivalence(ci_test, 0, 0.2, c("Treatment as usual", "New treatment"))
+#'
 #' @export
 #'
 interpret_equivalence <- function(ci, actual_null = 0, eq_margin = 0.1,

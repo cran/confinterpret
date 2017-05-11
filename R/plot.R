@@ -96,8 +96,8 @@ plot.interpretation_set <- function(x, extra_boundaries = NULL, ...) {
   lower_regions <- 0
   upper_regions <- 0
 
-  for (region_lower in 1:number_regions) {
-    for (region_upper in region_lower:number_regions) {
+  for (region_lower in 1 : number_regions) {
+    for (region_upper in region_lower : number_regions) {
       n <- n + 1
 
       lower_regions[[n]] <- region_lower
@@ -173,10 +173,11 @@ plot.interpretation_set <- function(x, extra_boundaries = NULL, ...) {
                                   "interpretation_short")
 
   # Margins that should be big enough for the labels.
-  graphics::par(mar=c(max(nchar(x$boundary_names)) * 0.6,       # Bottom
-                      1,                                        # Left
-                      1,                                        # Top
-                      max(nchar(interpretation_labels)) * 0.6)) # Right
+  graphics::par(mar=c(max(nchar(x$boundary_names),
+                          nchar(names(extra_boundaries))) * 0.6,  # Bottom
+                      1,                                          # Left
+                      1,                                          # Top
+                      max(nchar(interpretation_labels)) * 0.6))   # Right
 
   graphics::plot.new()
   graphics::plot.window(xlim, ylim, xaxs = "r")

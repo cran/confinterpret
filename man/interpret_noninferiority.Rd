@@ -39,6 +39,10 @@ recovering from a disease, that is likely to be beneficial; if it is
 measuring the prevalence of patients falling ill with a disease it is
 likely to be \strong{not} beneficial.}
 }
+\value{
+A list object with elements stating the interpretation in different
+  formats, plus the parameters used to generate the interpretation.
+}
 \description{
 Conduct non-inferiority tests on confidence intervals using a standard set
 of interpretations. Takes a confidence interval around an effect size
@@ -80,6 +84,15 @@ information about what exactly those in a comparison group got.)
 
 This function is provided in the form of a convenience wrapper for
 \code{\link{confinterpret}}, using
-\code{\link{interpretations_superiority}} as its
+\code{\link{interpretations_noninferiority}} as its
 \code{\link{interpretation_set}}.
+}
+\examples{
+# Establish a test confidence interval
+ci_test <- matrix(c(-0.05, 0.05),
+                  nrow = 1, dimnames = list("estimate",
+                                            c("2.5 \%", "97.5 \%")))
+interpret_noninferiority(ci_test, 0, 0.1, c("Treatment as usual",
+                                            "New treatment"))
+
 }
