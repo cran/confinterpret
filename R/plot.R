@@ -1,6 +1,6 @@
 # (c) Jim Vine
 # Author: Jim Vine
-# plot method for interpretation_set objects.
+# plot methods for interpretation_set and interpretation_result objects.
 
 #' Plot a diagram of the valid options for an interpretation_set object
 #'
@@ -23,7 +23,7 @@
 #' at 0, and the next ones (if any) will be at -1 and +1, and so on.
 #'
 #' Plots use the current R Graphics Palette, so you may wish to set that to
-#' something attractive before plotting. See ?palette.
+#' something attractive before plotting. See \code{?palette}.
 #'
 #' @param x
 #'   An \code{interpretation_set} object.
@@ -46,6 +46,7 @@
 #'
 plot.interpretation_set <- function(x, extra_boundaries = NULL, ...) {
 
+  # Check required packages ---------------------------------------------------
   if (!requireNamespace("graphics", quietly = TRUE)) {
     stop(paste("graphics package needed for plot.interpretation_set to work.",
                "Please install it."), call. = FALSE)
@@ -92,19 +93,9 @@ plot.interpretation_set <- function(x, extra_boundaries = NULL, ...) {
 
   # Generate the set of regions -----------------------------------------------
 
-  n <- 0
-  lower_regions <- 0
-  upper_regions <- 0
-
-  for (region_lower in 1 : number_regions) {
-    for (region_upper in region_lower : number_regions) {
-      n <- n + 1
-
-      lower_regions[[n]] <- region_lower
-      upper_regions[[n]] <- region_upper
-
-    }
-  }
+  lower_regions <- rep(1 : number_regions, number_regions : 1)
+  upper_regions <- unlist(mapply(function(x) { x : number_regions },
+                                 1 : number_regions))
 
   region_list <- cbind(lower_regions, upper_regions)
 
@@ -145,87 +136,805 @@ plot.interpretation_set <- function(x, extra_boundaries = NULL, ...) {
   ci_perms <- cbind(lower_value, upper_value)
 
   # Labelling
+  # Same rownames are used in print method.
   LETTERS78 <- c(LETTERS, paste0("A", LETTERS), paste0("B", LETTERS))
 
   rownames(ci_perms) <- LETTERS78[1 : nrow(ci_perms)]
 
 
-  # Actual plotting -----------------------------------------------------------
+  # Final setup ---------------------------------------------------------------
 
-  last <- nrow(ci_perms)
-  top <- last + 1
-
-  # Define width of the main background boxes.
-  box_edge_left <- boundaries[1] - 1.5 * boundary_spacing
-  box_edge_right <- boundaries[length(boundaries)] + 1.5 * boundary_spacing
-
-  # Define width of the edge ragged boundary.
-  edging_size <- 0.02 * (box_edge_right - box_edge_left)
-  pic_edge_left <- box_edge_left - edging_size
-  pic_edge_right <- box_edge_right + edging_size
-
-  xlim <- c(pic_edge_left, pic_edge_right)
-  ylim <- c(0, top)
+  names(boundaries) <- x$boundary_names
 
   # Uses lapply and `[[` to extract the interpretation_short values.
   # (Used for calculating size of margin and for displaying these.)
-  interpretation_labels <- lapply(x$interpretations, `[[`,
-                                  "interpretation_short")
+  interpretations <- lapply(x$interpretations, `[[`, "interpretation_short")
+
+
+  # Actual plotting -----------------------------------------------------------
+
+  plot_region_canvas(boundaries = boundaries,
+                     extra_boundaries = extra_boundaries,
+                     values = ci_perms,
+                     interpretations = interpretations,
+                     ...)
+
+
+  # Plot the options.
+  plot_intervals(intervals = ci_perms[nrow(ci_perms) : 1, ], ...)
+
+
+  # Label the options.
+  graphics::text(x = rowMeans(ci_perms),
+                 y = (nrow(ci_perms) : 1),
+                 rownames(ci_perms))
+
+
+}
+
+
+
+
+#' Plot an interpretation_result, as returned by confinterpret()
+#'
+#' Produces a diagram that illustrates the confidence interval that was
+#' interpreted using \code{\link{confinterpret}} against a background
+#' illustrating the \code{\link{interpretation_set}} that it was the basis for
+#' the interpretation.
+#'
+#' Additional boundaries can be displayed using the \code{extra_boundaries}
+#' parameter. This can be helpful if you want to show a position that is
+#' of some practical relevance, but is not defined as a boundary for the
+#' purposes of the \code{interpretation_set}.
+#'
+#' If you wish to plot multiple \code{interpretation_result} objects on one
+#' chart, see \code{\link{plot_interpretation_result_list}}.
+#'
+#' Plots use the current R Graphics Palette, so you may wish to set that to
+#' something attractive before plotting. See ?palette.
+#'
+#' @param x
+#'   An \code{interpretation_result} object, of the type returned by
+#'   \code{\link{confinterpret}}.
+#' @param extra_boundaries
+#'   A vector of numerical values specifying the position for displaying
+#'   additional boundaries, not specified in the \code{interpretation_set}.
+#'   May optionally be named values; if named, the names will be labelled
+#'   on the plot axis.
+#' @param estimate
+#'   Estimate value that the interval relates to. If not specified, a default
+#'   of the central point between the two ends of the interval will be assumed.
+#' @param ...
+#'   Further arguments passed to and from methods.
+#'
+#' @inheritParams plot_region_canvas
+#' @inheritParams plot_intervals
+#'
+#' @examples
+#' # Set a nice colour scheme
+#' grDevices::palette(c("#FF671F99", "#F2A90099", "#0085CA99"))
+#' # Set up a confidence interval to interpret
+#' ci_test <- matrix(c(-0.03, 0.05),
+#'                   nrow = 1,
+#'                   dimnames = list("estimate", c("2.5 %", "97.5 %")))
+#' noninf <- interpret_noninferiority(ci_test, 0, 0.05, c("Treatment as usual",
+#'                                                        "New treatment"))
+#' plot(noninf)
+#'
+#' @export
+#'
+plot.interpretation_result <- function(x,
+                                       extra_boundaries = NULL,
+                                       estimate = NULL,
+                                       boundary_values = TRUE,
+                                       boundary_label_pos = "below",
+                                       interpretation_label_pos = "right",
+                                       x_axis_pos = "below",
+                                       y_axis_pos = "none",
+                                       inner_margin = c(-0.1, 0.05, -0.1, 0.05),
+                                       edge_margin = c(0, 0.02, 0, 0.02),
+                                       edge_type = "gradient",
+                                       interval_type = "norm",
+                                       interval_value_labels = TRUE,
+                                       estimate_value_labels = TRUE,
+                                       plot_estimate_marks = TRUE,
+                                       estimate_mark_points = c(0, 0.05,
+                                                                0, -0.05),
+                                       ...) {
+
+  validate_interpretation_result(x)
+
+  interpretation_set <- x$parameters$interpretation_set
+  names(x$parameters$boundaries) <- interpretation_set$boundary_names
+
+  plot_region_canvas(boundaries = x$parameters$boundaries,
+                     extra_boundaries = extra_boundaries,
+                     values = x$parameters$ci,
+                     interpretations = x$interpretation_short,
+                     boundary_values = boundary_values,
+                     boundary_label_pos = boundary_label_pos,
+                     interpretation_label_pos = interpretation_label_pos,
+                     x_axis_pos = x_axis_pos,
+                     y_axis_pos = y_axis_pos,
+                     inner_margin = inner_margin,
+                     edge_margin = edge_margin,
+                     edge_type = edge_type,
+                     ...)
+
+
+  plot_intervals(intervals = x$parameters$ci,
+                 estimates = estimate,
+                 interval_type = interval_type,
+                 #y_scale = 0.75,
+                 interval_value_labels = interval_value_labels,
+                 estimate_value_labels = estimate_value_labels,
+                 plot_estimate_marks = plot_estimate_marks,
+                 estimate_mark_points = estimate_mark_points,
+                 ...)
+
+}
+
+
+
+#' Plot a canvas backed with regions defined by a set of boundaries
+#'
+#' Produces a plot with all the background elements for plotting
+#' interpretation_set objects and similar outputs.
+#'
+#' If using to plot interpretation_set objects as generic items, the
+#' boundaries will typically be at arbitrary values selected for
+#' visual clarity. In this case it will typically not make sense to
+#' plot a numerical x axis. But boundaries can also be plotted as specific
+#' values related to the intended interpretation, and x axis plotting is
+#' normally appropriate in this case.
+#'
+#' The colours of the background regions are determined by
+#' graphics::palette. Normally it will use the first n colours from the
+#' palette, where n is the number of regions (which is the number of
+#' boundaries + 1). If the left-most boundary is set to be at the edge of
+#' the plot (by having no values lower than it and setting inner_margin[2]
+#' and edge_margin[2] to 0), then the first colour in palette will be unused.
+#' Similarly, if the right-most boundary is set to be the edge of the plot
+#' then there will only be as many regions as boundaries, and elements 1:n-1
+#' of the palette will be used. (And similarly, one fewer regions than
+#' boundaries will be drawn if both the first and last boundaries are
+#' the edges of the plot.)
+#'
+#' A pair of extra margins are defined for the purposes of this plot. Both
+#' are technically drawn as part of the plotting area (i.e., not in the area
+#' of the actual margin, which normally contains axes etc.).
+#' Note that the order of edges used in these margins is the same as the
+#' \code{graphics::par} parameters \code{mar} and \code{oma}, but the
+#' scaling / units are not. These parameters are specified proportional to
+#' the area of active plotting, rather than as lines.)
+#'
+#' @param boundaries
+#' Named vector of numerical values of where boundaries should be drawn.
+#'
+#' @param extra_boundaries
+#' Names optional.
+#'
+#' @param values
+#' A matrix with either one or two columns containing the values of
+#' point estimates (one column) or ranges (two columns). Row names
+#' can specify labels.
+#'
+#' @param inner_margin
+#' Numerical vector of the form \code{c(bottom, left, top, right)}, which
+#' gives the amount of inner margin to be added, expressed as a proportion
+#' of the plotted area. This is space designed to be past any plotted objects
+#' but before the edging (defined separately via \code{edge_margin}).
+#' See Details.
+#'
+#' @param edge_margin
+#' Numerical vector of the form \code{c(bottom, left, top, right)}, which gives
+#' the amount of 'edge margin' to be added, expressed as a proportion of the
+#' plotted width. This is the space designed to be occupied by plot edges
+#' (e.g. a gradient fading out). Currently only implemented for left and
+#' right; top and bottom values are ignored. See Details.
+#'
+#' @param edge_type
+#' What style of edge to draw at the sides of the plot. Currently supported
+#' options are \code{"gradient"} (the default) and \code{"zigzag"}.
+#'
+#' @param boundary_label_pos
+#' Where to put the boundary labels.
+#' Options are \code{c("below", "above", "on top", "none")}.
+#' If you are planning to plot values on the canvas and want the boundary
+#' labels on top then you may want to choose "none" and make a call to
+#' \code{label_ontop_boundaries()} after plotting values.
+#'
+#' @param boundary_values
+#' A logical value indicating whether the values should be appended to
+#' the boundaries' names.
+#'
+#' @param interpretation_label_pos
+#' Options are \code{c("right", "left", "none")}
+#'
+#' @param interpretations
+#' Character vector of interpretations to be used for labelling interpretations
+#' or \code{NULL}. If provided, should be the same length as
+#' \code{nrow(values)}.
+#'
+#' @param x_axis_pos
+#' Location of a numerical x axis.
+#' Options are \code{c("none", "below", "above")}.
+#'
+#' @param y_axis_pos
+#' Location of a numerical y axis. Default "none" will almost always be right.
+#' Options are c\code{("none", "left", "right")}.
+#'
+#' @param ...
+#' Further parameters to be passed on.
+#'
+plot_region_canvas <- function(boundaries,
+                               extra_boundaries = NULL,
+                               values,
+                               interpretations = NULL,
+                               boundary_values = FALSE,
+                               boundary_label_pos = "below",
+                               interpretation_label_pos = "right",
+                               x_axis_pos = "none",
+                               y_axis_pos = "none",
+                               inner_margin = c(0, 0.05, 0, 0.05),
+                               edge_margin = c(0, 0.02, 0, 0.02),
+                               edge_type = "gradient",
+                               ...) {
+
+  # Check required packages ---------------------------------------------------
+  if (!requireNamespace("graphics", quietly = TRUE)) {
+    stop(paste("graphics package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  if (!requireNamespace("grDevices", quietly = TRUE)) {
+    stop(paste("grDevices package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  # Definitions ---------------------------------------------------------------
+
+  # If boundary_values == TRUE then append them into the relevant names.
+  if(boundary_values) {
+    names(boundaries) <-
+      paste0(names(boundaries), "  ( ", boundaries, " )")
+    if(!is.null(names(extra_boundaries))) {
+      names(extra_boundaries) <-
+        paste0(names(extra_boundaries), "  ( ", extra_boundaries, " )")
+    }
+  }
+
+  # The maximum and minimum values to plot and distance between them.
+  plot_min <- min(boundaries, values)
+  plot_max <- max(boundaries, values)
+  plot_width <- plot_max - plot_min
+
+  # The extent of the boxes representing the regions (excluding any edge).
+  regions_min <- plot_min - (plot_width * inner_margin[2])
+  regions_max <- plot_max + (plot_width * inner_margin[4])
+
+  # The extent of the edges.
+  edge_min <- regions_min - (plot_width * edge_margin[2])
+  edge_max <- regions_max + (plot_width * edge_margin[4])
+
+  number_values <- nrow(values)
+  plot_height <- number_values + 1
+  top <- plot_height * (1 + inner_margin[3])
+  bottom <- 0 - (plot_height * inner_margin[3])
+
+  xlim <- c(edge_min, edge_max)
+  ylim <- c(bottom, top)
+
 
   # Margins that should be big enough for the labels.
-  graphics::par(mar=c(max(nchar(x$boundary_names),
-                          nchar(names(extra_boundaries))) * 0.6,  # Bottom
-                      1,                                          # Left
-                      1,                                          # Top
-                      max(nchar(interpretation_labels)) * 0.6))   # Right
+  # 0.5 all round to start, then add on 2 lines for an axis if on the side
+  # and an amount for the longest labels if on the side.
+  margin_above <- 0.5 +
+    ifelse(x_axis_pos == "above", 2, 0) +
+    ifelse(boundary_label_pos == "above",
+           max(0, strwidthl(names(boundaries)),
+               strwidthl(names(extra_boundaries))),
+           0)
+
+  margin_below <- 0.5 +
+    ifelse(x_axis_pos == "below", 2, 0) +
+    ifelse(boundary_label_pos == "below",
+           max(0, strwidthl(names(boundaries)),
+               strwidthl(names(extra_boundaries))),
+           0)
+
+  margin_left <- 0.5 +
+    ifelse(y_axis_pos == "left", 2, 0) +
+    ifelse(interpretation_label_pos == "left",
+           max(0, 1 + strwidthl(interpretations)),
+           0)
+
+  margin_right <- 0.5 +
+    ifelse(y_axis_pos == "right", 2, 0) +
+    ifelse(interpretation_label_pos == "right",
+           max(0, 1 + strwidthl(interpretations)),
+           0)
+
+  graphics::par(mar = c(margin_below, margin_left, margin_above, margin_right))
 
   graphics::plot.new()
   graphics::plot.window(xlim, ylim, xaxs = "r")
 
-  # Draw the background boxes.
-  graphics::rect(xleft = c(box_edge_left, boundaries),
-                 ybottom = 0,
-                 xright = c(boundaries, box_edge_right),
+
+  # Draw the background boxes -------------------------------------------------
+  graphics::rect(xleft = c(regions_min, boundaries),
+                 ybottom = bottom,
+                 xright = c(boundaries, regions_max),
                  ytop = top,
                  col = grDevices::palette(),
                  border = NA)
 
-  # How many zigzags on each edge.
-  edging_number <- 40
+
+  # Draw the edges ------------------------------------------------------------
+  if(edge_type == "gradient") {
+
+    plot_edge_gradient(start_colour = grDevices::palette()[1],
+                       end_colour = graphics::par("bg"),
+                       # gradient_steps = 10,
+                       xstart = regions_min,
+                       xend = edge_min,
+                       ybottom = bottom,
+                       ytop = top,
+                       ...)
+
+    plot_edge_gradient(start_colour = grDevices::palette()[length(boundaries) + 1],
+                       end_colour = graphics::par("bg"),
+                       # gradient_steps = 10,
+                       xstart = regions_max,
+                       xend = edge_max,
+                       ybottom = bottom,
+                       ytop = top,
+                       ...)
+
+  }
+
+  if(edge_type == "zigzag") {
+
+    plot_edge_zigzag(colour = grDevices::palette()[1],
+                     # zigzag_number = 40,
+                     xstart = regions_min,
+                     xend = edge_min,
+                     ybottom = bottom,
+                     ytop = top,
+                     ...)
+
+    plot_edge_zigzag(colour = grDevices::palette()[length(boundaries) + 1],
+                     # zigzag_number = 40,
+                     xstart = regions_max,
+                     xend = edge_max,
+                     ybottom = bottom,
+                     ytop = top,
+                     ...)
+
+  }
+
+  # Add any axes requested ----------------------------------------------------
+
+  if(x_axis_pos == "below") {
+    graphics::Axis(side = 1)
+    graphics::grid(ny = NA)
+  }
+
+  if(x_axis_pos == "above") {
+    graphics::Axis(side = 3)
+    graphics::grid(ny = NA)
+  }
+
+  if(y_axis_pos == "left") {
+    graphics::Axis(side = 2)
+  }
+
+  if(y_axis_pos == "right") {
+    graphics::Axis(side = 4)
+  }
+
+
+  # Extra 'boundaries' --------------------------------------------------------
+
+  # A dotted line if anything is passed as extra_boundaries
+  graphics::abline(v = extra_boundaries, lty="15151555")
+
+
+  # Add any labelling requested -----------------------------------------------
+
+  # Label the boundaries.
+  # And label the extra_boundaries, if at least one name exists.
+  if(boundary_label_pos == "below" |
+     boundary_label_pos == "above") {
+    graphics::Axis(side = ifelse(boundary_label_pos == "below", 1, 3), # 1=below, 3=above
+                   at = boundaries,
+                   labels = names(boundaries),
+                   las = 2,  # Label text perpendicular to axis
+                   lwd = 0,  # Line width - 0 supresses line.
+                   line = ifelse(boundary_label_pos == x_axis_pos, 2, 0))
+
+    if(!is.null(names(extra_boundaries))) {
+      graphics::Axis(side = ifelse(boundary_label_pos == "below", 1, 3),
+                     at = extra_boundaries,
+                     labels = names(extra_boundaries),
+                     las = 2,  # Label text perpendicular to axis
+                     lwd = 0,  # Line width - 0 supresses line.
+                     line = ifelse(boundary_label_pos == x_axis_pos, 2, 0))
+    }
+  } else if(boundary_label_pos == "on top") {
+    label_ontop_boundaries(boundaries, extra_boundaries)
+  }
+
+  # Label the interpretations
+  if(interpretation_label_pos == "right" |
+     interpretation_label_pos == "left") {
+
+    graphics::Axis(side = ifelse(interpretation_label_pos == "right", 4, 2), # 4=right, 2=left
+                   at = number_values : 1,
+                   labels = interpretations,
+                   las = 2,  # Label text perpendicular to axis
+                   lwd = 0,  # Line width - 0 supresses line.
+                   line = ifelse(interpretation_label_pos == y_axis_pos, 2, 0))
+
+  }
+
+}
+
+
+
+
+# xstart, xend
+# Specify the starting x coordinate and the ending one. xstart is where the
+# start_colour is used. xend is where end_colour is used.
+plot_edge_gradient <- function(start_colour,
+                               end_colour,
+                               gradient_steps = 10,
+                               xstart, xend,
+                               ybottom, ytop,
+                               ...) {
+
+  # Check required packages ---------------------------------------------------
+  if (!requireNamespace("graphics", quietly = TRUE)) {
+    stop(paste("graphics package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  if (!requireNamespace("grDevices", quietly = TRUE)) {
+    stop(paste("grDevices package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+
+  # Colours -------------------------------------------------------------------
+
+  shades <- grDevices::colorRampPalette(c(start_colour, end_colour),
+                             space = "Lab")(gradient_steps)
+
+  # colorRampPalette doesn't preserve alphas. Find it and add it on.
+  alpha <- grDevices::col2rgb(start_colour, alpha = TRUE)[4,]
+  shades <- grDevices::rgb(grDevices::col2rgb(shades)[1,] / 255,
+                           grDevices::col2rgb(shades)[2,] / 255,
+                           grDevices::col2rgb(shades)[3,] / 255,
+                           alpha / 255)
+
+  # Definitions ---------------------------------------------------------------
+
+  shade_edges <- seq(from = xstart, to = xend, length.out = gradient_steps + 1)
+
+  if(xstart > xend) {
+    shades <- rev(shades)
+    shade_edges <- rev(shade_edges)
+  }
+
+  # Drawing -------------------------------------------------------------------
+
+  graphics::rect(xleft = shade_edges[1 : gradient_steps],
+                 ybottom = ybottom,
+                 xright = shade_edges[2 : (gradient_steps + 1)],
+                 ytop = ytop,
+                 col = shades,
+                 border = NA)
+
+}
+
+plot_edge_zigzag <- function(colour,
+                             zigzag_number = 40,
+                             xstart, xend,
+                             ybottom, ytop,
+                             ...) {
+
+
+  # Check required packages ---------------------------------------------------
+  if (!requireNamespace("graphics", quietly = TRUE)) {
+    stop(paste("graphics package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  if (!requireNamespace("grDevices", quietly = TRUE)) {
+    stop(paste("grDevices package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
 
   # Polygons to plot the filled zigzags. Filled in same colours as edge
   # background boxes to extend them.
-  poly_y <- c(seq(0, top, length.out = 1 + edging_number * 2), top, 0)
-  poly_x <- c(pic_edge_left,
-              rep(c(box_edge_left, pic_edge_left), edging_number),
-              box_edge_left, box_edge_left)
+  poly_y <- c(seq(ybottom, ytop, length.out = 1 + zigzag_number * 2),
+              ytop, ybottom)
+  poly_x <- c(xend, rep(c(xstart, xend), zigzag_number), xstart, xstart)
 
   graphics::polygon(poly_x, poly_y,
                     density = NULL,
                     angle = 45,
                     border = NA,
-                    col = grDevices::palette()[1],
+                    col = colour,
                     lty = graphics::par("lty"),
                     fillOddEven = FALSE)
 
+}
 
-  poly_x <- c(pic_edge_right,
-              rep(c(box_edge_right, pic_edge_right), edging_number),
-              box_edge_right, box_edge_right)
+#' Plot intervals
+#'
+#' Plot intervals on a canvas, typically prepared with
+#' \code{plot_region_canvas()}.
+#'
+#' The \code{estimate_mark_points} parameter can be used to set the length of
+#' estimate marks, if they are requested using
+#' \code{plot_estimate_marks = TRUE}. The default is extending a little above
+#' and below the interval plot shape and with a gap in the middle big enough
+#' for a line of text (a bit bigger than the height of letter "M"). To leave
+#' no gap, set the first and third elements to zero, e.g.
+#' \code{estimate_mark_points = c(0, 0.05, 0, -0.05)}. To have the marks not
+#' extend outside of the interval shape, set the second and fourth elements to
+#' zero, e.g. \code{estimate_mark_points = c(0, 0, 0, 0)}.
+#'
+#' @param intervals
+#' The interval(s) to be plotted. Two column matrix.
+#'
+#' @param estimates
+#' Estimates for each of the intervals (optional).
+#'
+#' @param interval_labels_offset
+#' Amount to offset interval labels by from the centre of the end
+#' of the interval's plot. \code{c(x1, x2, y1, y2)}.
+#'
+#' @param estimate_labels_offset
+#'   Amount to offset estimate labels by. \code{c(x, y)}. Normally want the
+#'   estimate to be x-located at its value, but may want a y-offset to move it
+#'   above or below the plot shape that represents the interval.
+#'
+#' @param interval_type
+#' Set the way the interval is presented. Current options are
+#' \code{c("norm", "unif")} for a normal distribution-based curve
+#' and a box, respectively.
+#'
+#' @param interval_value_labels
+#' Logical value specifying whether interval value labels are to be added.
+#'
+#' @param estimate_value_labels
+#' Logical value specifying whether estimate value labels are to be added.
+#'
+#' @param plot_estimate_marks
+#' Whether to plot marks at the x location of the estimates.
+#'
+#' @param estimate_mark_points
+#' y positions of the ends of the estimate marks as a numeric vector of length
+#' 4. Values are, in order: start (relative to centre), end (relative to box
+#' top), start (relative to centre), end (relative to box bottom).
+#'
+#' @param ...
+#' Further parameters to be passed on.
+#'
+plot_intervals <- function(intervals,
+                           estimates = NULL,
+                           interval_value_labels = FALSE,
+                           estimate_value_labels = FALSE,
+                           interval_labels_offset,
+                           estimate_labels_offset,
+                           interval_type = "norm",
+                           plot_estimate_marks = FALSE,
+                           estimate_mark_points =
+                             c(1.2 * graphics::strheight("M"), 0.05,
+                               -1.2 * graphics::strheight("M"), -0.05),
+                           ...) {
 
-  graphics::polygon(poly_x, poly_y,
-                    density = NULL,
-                    angle = 45,
-                    border = NA,
-                    col = grDevices::palette()[number_regions],
-                    lty = graphics::par("lty"),
-                    fillOddEven = FALSE)
+  if(interval_type == "norm") {
+    plot_intervals_norm(intervals = intervals,
+                        estimates = estimates,
+                        interval_value_labels = interval_value_labels,
+                        estimate_value_labels = estimate_value_labels,
+                        plot_estimate_marks = plot_estimate_marks,
+                        estimate_mark_points = estimate_mark_points,
+                        ...)
+  } else if(interval_type == "unif") {
+    plot_intervals_unif(intervals = intervals,
+                        estimates = estimates,
+                        interval_value_labels = interval_value_labels,
+                        estimate_value_labels = estimate_value_labels,
+                        plot_estimate_marks = plot_estimate_marks,
+                        estimate_mark_points = estimate_mark_points,
+                        ...)
+  }
 
-  # Extra 'boundaries': a dotted line if anything is passed as extra_boundaries
-  graphics::abline(v = extra_boundaries, lty="15151555")
 
-  # Plot the options.
-  graphics::boxplot.matrix(ci_perms[last : 1, ],
+}
+
+#' Plot intervals as curved (normal distribution) areas
+#'
+#' @param y_scale
+#' How tall the interval plots are to be drawn
+#'
+#' @inheritParams plot_intervals
+plot_intervals_norm <- function(intervals,
+                               estimates = NULL,
+                               y_scale = 1,
+                               interval_value_labels = FALSE,
+                               estimate_value_labels = FALSE,
+                               interval_labels_offset = c(0, 0, 0.15, 0.15),
+                               estimate_labels_offset = c(0, 0.5 * y_scale),
+                               plot_estimate_marks = FALSE,
+                               estimate_mark_points =
+                                 c(1.2 * graphics::strheight("M"), 0.05,
+                                   -1.2 * graphics::strheight("M"), -0.05),
+                               ...) {
+
+  # Check required packages ---------------------------------------------------
+  if (!requireNamespace("graphics", quietly = TRUE)) {
+    stop(paste("graphics package needed for plot_intervals_norm to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  if (!requireNamespace("grDevices", quietly = TRUE)) {
+    stop(paste("grDevices package needed for plot_intervals_norm to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  if (!requireNamespace("stats", quietly = TRUE)) {
+    stop(paste("stats package needed for plot_intervals_norm to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  # Etc ----------------------------------------------------------------------
+
+  ci_x_band <- mapply(seq, intervals[, 1], intervals[, 2], length.out = 100)
+  sd <- (intervals[, 2] - intervals[, 1]) / 4
+  if(is.null(estimates)) {
+    estimates <- (intervals[, 1] + intervals[, 2]) / 2
+  }
+
+  for(i in 1 : nrow(intervals)) {
+
+    y_mid <- i
+
+
+    # Plot a polygon representing the CI as a normal distribution
+
+    # Simple filled version
+    # graphics::polygon(x = c(ci_x_band[, i], rev(ci_x_band[, i])),
+    #                   y = c(y_mid + (dnorm(ci_x_band[, i], mean = estimate[i], sd[i]) * sd[i] * y_scale),
+    #                         y_mid - rev(dnorm(ci_x_band[, i], mean = estimate[i], sd[i]) * sd[i] * y_scale)),
+    #                   col = "#FFFFFFCC")
+
+
+    n_curve <- function(x) {
+      # Maximum value of normal distribution (where x=mean) is
+      #     1 / (sqrt(2 * pi) * sd)
+      # By multiplying by sd we get maximum of:
+      #     1 / (2 * pi)
+      # Which is about 0.4.
+      stats::dnorm(x, mean = estimates[i], sd[i]) * sd[i] * y_scale
+    }
+
+    # graphics::polygon(x = c(ci_x_band[, i], rev(ci_x_band[, i])),
+    #                   y = c(y_mid + (dnorm(ci_x_band[, i], mean = estimate[i], sd[i]) * sd[i] * y_scale),
+    #                         y_mid - rev(dnorm(ci_x_band[, i], mean = estimate[i], sd[i]) * sd[i] * y_scale)),
+    #                   col = NA)
+
+
+    min_end <- (ci_x_band[1, i] - estimates[i]) * 1.2
+    max_end <- (ci_x_band[length(ci_x_band[, i]), i] - estimates[i]) * 1.2
+
+    for(j in 1 : (length(ci_x_band[, i]) - 1)) {
+
+      graphics::polygon(x = c(ci_x_band[j,      i],
+                              ci_x_band[j,      i],
+                              ci_x_band[j + 1L, i],
+                              ci_x_band[j + 1L, i]),
+                        y = c(y_mid - n_curve(ci_x_band[j,      i]),
+                              y_mid + n_curve(ci_x_band[j,      i]),
+                              y_mid + n_curve(ci_x_band[j + 1L, i]),
+                              y_mid - n_curve(ci_x_band[j + 1L, i])),
+                        col = grDevices::rgb(1, 1, 1, 1 -
+                                               max((ci_x_band[j, i] - estimates[i]) / min_end,
+                                          (ci_x_band[j, i] - estimates[i]) / max_end)),
+                        border = NA)
+    }
+
+    graphics::polygon(x = c(ci_x_band[, i], rev(ci_x_band[, i])),
+                      y = c(y_mid + n_curve(ci_x_band[, i]),
+                            y_mid - rev( n_curve(ci_x_band[, i]))),
+                      col = NA)
+
+    # Label the interval bounds
+    if(interval_value_labels) {
+      label_interval_values(intervals, interval_labels_offset, ...)
+    }
+
+    # Label the estimates
+    if(estimate_value_labels) {
+      label_estimate_values(estimates, estimate_labels_offset, ...)
+    }
+
+
+    # Add marks for the location of the estimate.
+
+    if(plot_estimate_marks) {
+
+      graphics::lines(x = c(estimates[i], estimates[i]),
+                      y = c(y_mid + estimate_mark_points[1],
+                            y_mid + n_curve(estimates[i]) +
+                              estimate_mark_points[2]),
+                      col = "#333333")
+
+      graphics::lines(x = c(estimates[i], estimates[i]),
+                      y = c(y_mid + estimate_mark_points[3],
+                            y_mid - n_curve(estimates[i]) +
+                              estimate_mark_points[4]),
+                      col = "#333333")
+
+    }
+  }
+}
+
+#' Plot intervals as uniform (box) areas
+#'
+#' The current implementation of this function uses \code{\link{boxplot}} to
+#' draw its boxes.
+#'
+#' The default value for the \code{estimate_labels_offset} parameter is defined
+#' in terms of a variable, \code{box_halfheight}. Because \code{boxplot}, the
+#' underlying plotting function, draws boxes different heights depending on
+#' the number of boxes drawn, this is set within the function. For one box the
+#' \code{box_halfheight} is \code{0.2}; otherwise it is \code{0.4}.
+#'
+#' @inheritParams plot_intervals
+#'
+plot_intervals_unif <- function(intervals,
+                                estimates = NULL,
+                                interval_value_labels = FALSE,
+                                estimate_value_labels = FALSE,
+                                interval_labels_offset = c(0, 0,
+                                                           box_halfheight +
+                                                             0.1,
+                                                           box_halfheight +
+                                                             0.1),
+                                estimate_labels_offset = c(0, box_halfheight +
+                                                             0.1),
+                                plot_estimate_marks = FALSE,
+                                estimate_mark_points =
+                                  c(1.2 * graphics::strheight("M"), 0.05,
+                                    -1.2 * graphics::strheight("M"), -0.05),
+                                ...) {
+
+
+  # Check required packages ---------------------------------------------------
+  if (!requireNamespace("graphics", quietly = TRUE)) {
+    stop(paste("graphics package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  if (!requireNamespace("grDevices", quietly = TRUE)) {
+    stop(paste("grDevices package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  # Etc ----------------------------------------------------------------------
+
+  box_halfheight <- ifelse(nrow(intervals) == 1, 0.2, 0.4)
+
+  if(is.null(estimates)) {
+    estimates <- (intervals[, 1] + intervals[, 2]) / 2
+  }
+
+  graphics::boxplot.matrix(intervals,
                            use.cols = FALSE,
                            horizontal = TRUE,
                            medlty = "blank",
@@ -233,33 +942,142 @@ plot.interpretation_set <- function(x, extra_boundaries = NULL, ...) {
                            add = TRUE,
                            axes = FALSE)
 
-  # Label the options.
-  graphics::text(x = rowMeans(ci_perms),
-                 y = (last : 1),
-                 rownames(ci_perms))
-
-  # Label the boundaries.
-  graphics::Axis(side = 1, # 1=below
-                 at = boundaries,
-                 labels = x$boundary_names,
-                 las = 2,  # Label text perpendicular to axis
-                 lwd = 0)
-
-  # Label the extra_boundaries, if at least one name exists.
-  if(!is.null(names(extra_boundaries))) {
-    graphics::Axis(side = 1,
-                   at = extra_boundaries,
-                   labels = names(extra_boundaries),
-                   las = 2,  # Label text perpendicular to axis
-                   lwd = 0)
+  # Label the interval bounds
+  if(interval_value_labels) {
+    label_interval_values(intervals, interval_labels_offset, ...)
   }
 
-  # Label with the interpretations
-  graphics::Axis(side = 4, # 4=right
-                 at = last : 1,
-                 labels = interpretation_labels,
-                 las = 2,  # Label text perpendicular to axis
-                 lwd = 0)  # Line width - 0 supresses line.
+  # Label the estimates
+  if(estimate_value_labels) {
+    label_estimate_values(estimates, estimate_labels_offset, ...)
+  }
 
+  # Add marks for the location of the estimate.
+
+  if(plot_estimate_marks) {
+
+    for(i in 1 : length(estimates)) {
+
+      graphics::lines(x = c(estimates[i], estimates[i]),
+                      y = c(i + estimate_mark_points[1],
+                            i + box_halfheight + estimate_mark_points[2]),
+                      col = "#333333")
+
+      graphics::lines(x = c(estimates[i], estimates[i]),
+                      y = c(i + estimate_mark_points[3],
+                            i - box_halfheight + estimate_mark_points[4]),
+                      col = "#333333")
+
+    }
+  }
 }
 
+label_interval_values <- function(intervals,
+                                  interval_labels_offset = c(0, 0, 0, 0),
+                                  interval_labels_rounding = 3,
+                                  ...) {
+
+  # Check required packages ---------------------------------------------------
+  if (!requireNamespace("graphics", quietly = TRUE)) {
+    stop(paste("graphics package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  if (!requireNamespace("grDevices", quietly = TRUE)) {
+    stop(paste("grDevices package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  # Etc ----------------------------------------------------------------------
+
+  graphics::text(x = cbind(intervals[, 1] + interval_labels_offset[1],
+                           intervals[, 2] + interval_labels_offset[2]),
+                 y = c((1 : nrow(intervals)) + interval_labels_offset[3],
+                       (1 : nrow(intervals)) + interval_labels_offset[4]),
+                 round(intervals, interval_labels_rounding))
+}
+
+
+label_estimate_values <- function(estimates,
+                                  estimate_labels_offset = c(0, 0),
+                                  estimate_labels_rounding = 3,
+                                  ...) {
+
+  # Check required packages ---------------------------------------------------
+  if (!requireNamespace("graphics", quietly = TRUE)) {
+    stop(paste("graphics package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  if (!requireNamespace("grDevices", quietly = TRUE)) {
+    stop(paste("grDevices package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  # Etc ----------------------------------------------------------------------
+
+  graphics::text(x = estimates + estimate_labels_offset[1],
+                 y = (1 : length(estimates)) + estimate_labels_offset[2],
+                 round(estimates, estimate_labels_rounding))
+}
+
+
+
+#' Label the boundaries on top of the plot.
+#'
+#' If plotting values or ranges may want to call this directly last
+#' to ensure it is on top, and specify no labels in the canvas plotting call.
+#'
+#' @inheritParams plot_region_canvas
+#'
+label_ontop_boundaries <- function(boundaries, extra_boundaries = NULL) {
+
+  # Check required packages ---------------------------------------------------
+  if (!requireNamespace("graphics", quietly = TRUE)) {
+    stop(paste("graphics package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  if (!requireNamespace("grDevices", quietly = TRUE)) {
+    stop(paste("grDevices package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  # Etc ----------------------------------------------------------------------
+
+  y_mid <- (graphics::par("usr")[4] + graphics::par("usr")[3]) / 2
+  graphics::text(x = boundaries,
+                 y = y_mid,
+                 labels = names(boundaries),
+                 srt = 90)
+
+  if(!is.null(names(extra_boundaries))) {
+    graphics::text(x = extra_boundaries,
+                   y = y_mid,
+                   labels = names(extra_boundaries),
+                   srt = 90)
+  }
+}
+
+#' Obtain string widths in (approximate) multiple of lines.
+#'
+#' @param s
+#' A character vector whose width is to be determined.
+strwidthl <- function(s) {
+
+  # Check required packages ---------------------------------------------------
+  if (!requireNamespace("graphics", quietly = TRUE)) {
+    stop(paste("graphics package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  if (!requireNamespace("grDevices", quietly = TRUE)) {
+    stop(paste("grDevices package needed for plotting functions to work.",
+               "Please install it."), call. = FALSE)
+  }
+
+  # Etc ----------------------------------------------------------------------
+
+  graphics::strwidth(s, units = "inches") /
+    graphics::strheight("M", unit = "inches")
+}

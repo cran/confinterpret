@@ -42,13 +42,18 @@
 #' ordering of the confidence interval: the numerically lower confidence limit
 #' should be listed first either way.
 #'
+#' Plotting functions are provided to display the results of
+#' \code{confinterpret}. To plot a single result see
+#' \code{\link{plot.interpretation_result}}. To plot multiple results on one
+#' chart see \code{\link{plot_interpretation_result_list}}.
+#'
 #' @param ci
 #'   A single row from a matrix of the type returned by \code{confint()},
 #'   containing the confidence interval for the parameter estimate. The two
 #'   columns provide the lower and upper confidence limits.
 #' @param interpretation_set
 #'   List-based object that specifies the boundaries between regions that each
-#'   of the confidence limits can fill in, and the interpretations to be
+#'   of the confidence limits can fall in, and the interpretations to be
 #'   returned in each of the cases.
 #' @param boundaries
 #'   Vector of numbers specifying the values for each of the boundaries defined
@@ -63,8 +68,9 @@
 #'   This can be used to reverse the assessment, including in the cases where
 #'   only one boundary is supplied. See Details.
 #'
-#' @return A list object with elements stating the interpretation in different
-#'   formats, plus the parameters used to generate the interpretation.
+#' @return A list object of class \code{\link{interpretation_result}} with
+#'   elements stating the interpretation in different formats, plus the
+#'   parameters used to generate the interpretation.
 #' @examples
 #' # Establish a test confidence interval
 #' ci_test <- matrix(c(-0.1,0.1),
@@ -210,33 +216,19 @@ confinterpret <- function(ci,
   # Extract the relevant interpretation from the interpretation_set.
   interpretation <- interpretation_set$interpretations[[interpretation_number]]
 
-
-  # Perform replacements on labelled text =====================================
-
-  # Only necessary if there are comparison_labels. (It is possible to have
-  #   interpretation_set objects with no placeholders, which don't need
-  #   replacements.)
-  if(!is.null(comparison_labels)) {
-    for (i in 1 : length(interpretation)) {
-      for (label_name in names(comparison_labels)) {
-        interpretation[i] <- gsub(interpretation_set$placeholders[[label_name]],
-                                  comparison_labels[[label_name]],
-                                  interpretation[i], fixed = TRUE)
-      }
-    }
-  }
+  interpretation_result <- interpretation_result(interpretation = interpretation,
+                                                 ci = ci,
+                                                 interpretation_set = interpretation_set,
+                                                 interpretation_set_name = deparse(substitute(interpretation_set)),
+                                                 boundaries = boundaries,
+                                                 comparison_labels = comparison_labels,
+                                                 low_to_high = low_to_high)
 
   # Done ======================================================================
 
-  interpretation$parameters <- list(
-    ci = ci,
-    interpretation_set_name = deparse(substitute(interpretation_set)),
-    boundaries = boundaries,
-    comparison_labels = comparison_labels,
-    low_to_high = low_to_high
-  )
-
-  return(interpretation)
+  return(interpretation_result)
 }
+
+
 
 

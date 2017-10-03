@@ -13,7 +13,7 @@ containing the confidence interval for the parameter estimate. The two
 columns provide the lower and upper confidence limits.}
 
 \item{interpretation_set}{List-based object that specifies the boundaries between regions that each
-of the confidence limits can fill in, and the interpretations to be
+of the confidence limits can fall in, and the interpretations to be
 returned in each of the cases.}
 
 \item{boundaries}{Vector of numbers specifying the values for each of the boundaries defined
@@ -29,8 +29,9 @@ This can be used to reverse the assessment, including in the cases where
 only one boundary is supplied. See Details.}
 }
 \value{
-A list object with elements stating the interpretation in different
-  formats, plus the parameters used to generate the interpretation.
+A list object of class \code{\link{interpretation_result}} with
+  elements stating the interpretation in different formats, plus the
+  parameters used to generate the interpretation.
 }
 \description{
 Produces descriptive interpretations of confidence intervals, depending
@@ -63,6 +64,11 @@ The use of low_to_high only affects the order of the boundaries (and
 the regions these implicitly define). It does \strong{not} affect the
 ordering of the confidence interval: the numerically lower confidence limit
 should be listed first either way.
+
+Plotting functions are provided to display the results of
+\code{confinterpret}. To plot a single result see
+\code{\link{plot.interpretation_result}}. To plot multiple results on one
+chart see \code{\link{plot_interpretation_result_list}}.
 }
 \examples{
 # Establish a test confidence interval

@@ -1,6 +1,7 @@
 # confinterpret
 
 [![Travis-CI Build Status](https://travis-ci.org/jimvine/confinterpret.svg?branch=master)](https://travis-ci.org/jimvine/confinterpret)
+[![CRAN_Status_Badge](http://www.r-pkg.org/badges/version/confinterpret)](https://CRAN.R-project.org/package=confinterpret)
 
 An R package for interpreting confidence intervals.
 
@@ -57,4 +58,8 @@ ci_above_sup$interpretation
 
 # Access the full interpretation, marked up with markdown:
 ci_above_sup$interpretation_md
+
+# Plot a chart of the interpretation (specify a nice colour-scheme first):
+grDevices::palette(c("#FF671F99", "#F2A90099", "#0085CA99"))
+plot(ci_above_sup)
 ```
